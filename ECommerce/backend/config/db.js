@@ -11,3 +11,6 @@ const connectDB = async () => {
 };
 
 module.exports = connectDB;
+// npm uninstall mongodb mongoose
+//npm install mongoose@7 mongodb@6
+//npm run dev
