@@ -1,0 +1,783 @@
+EmployeeAura.cmp
+<aura:component
+    controller="EmployeeController"
+    implements="flexipage:availableForAllPageTypes"
+    access="global">
+
+    <!-- INIT -->
+
+    <aura:handler
+        name="init"
+        value="{!this}"
+        action="{!c.doInit}"/>
+
+    <!-- ATTRIBUTES -->
+
+    <aura:attribute
+        name="employeeName"
+        type="String"/>
+
+    <aura:attribute
+        name="email"
+        type="String"/>
+
+    <aura:attribute
+        name="salary"
+        type="Decimal"/>
+
+    <aura:attribute
+        name="department"
+        type="String"/>
+
+    <aura:attribute
+        name="joiningDate"
+        type="Date"/>
+
+    <aura:attribute
+        name="employees"
+        type="Employee__c[]"/>
+
+    <!-- FORM -->
+
+    <lightning:card title="Employee Management Form">
+
+        <div class="slds-p-around_medium">
+
+            <lightning:input
+                label="Employee Name"
+                value="{!v.employeeName}"/>
+
+            <lightning:input
+                type="email"
+                label="Email"
+                value="{!v.email}"/>
+
+            <lightning:input
+                type="number"
+                label="Salary"
+                value="{!v.salary}"/>
+
+            <lightning:select
+                label="Department"
+                value="{!v.department}">
+
+                <option value="">
+                    --Select--
+                </option>
+
+                <option value="HR">
+                    HR
+                </option>
+
+                <option value="IT">
+                    IT
+                </option>
+
+                <option value="Finance">
+                    Finance
+                </option>
+
+            </lightning:select>
+
+            <lightning:input
+                type="date"
+                label="Joining Date"
+                value="{!v.joiningDate}"/>
+
+            <br/>
+
+            <lightning:button
+                label="Save Employee"
+                onclick="{!c.handleSubmit}"
+                variant="brand"/>
+
+        </div>
+
+    </lightning:card>
+
+    <!-- EMPLOYEE LIST -->
+
+    <br/>
+
+    <lightning:card title="Employee List">
+
+        <aura:iteration
+            items="{!v.employees}"
+            var="emp">
+
+            <p>
+
+                {!emp.Name}
+                |
+
+                {!emp.Email__c}
+                |
+
+                {!emp.salary__c}
+                |
+
+                {!emp.department__c}
+                |
+
+                {!emp.Join_Date__c}
+
+            </p>
+
+        </aura:iteration>
+
+    </lightning:card>
+
+</aura:component>
+
+
+
+
+EmployeeController
+public with sharing class EmployeeController {
+
+    @AuraEnabled
+    public static String saveEmployee(
+
+        String name,
+        String email,
+        Decimal salary,
+        String department,
+        Date joiningDate
+    ) {
+
+        try {
+
+            // Duplicate Email Check
+
+            List<Employee__c> existing = [
+
+                SELECT Id
+                FROM Employee__c
+                WHERE Email__c = :email
+                LIMIT 1
+            ];
+
+            if(!existing.isEmpty()){
+
+                return 'EMAIL_EXISTS';
+            }
+
+            // Create Employee Record
+
+            Employee__c emp =
+                new Employee__c();
+
+            emp.Name = name;
+
+            emp.Email__c = email;
+
+            emp.salary__c = salary;
+
+            emp.department__c = department;
+
+            emp.Join_Date__c = joiningDate;
+
+            insert emp;
+
+            return 'SUCCESS';
+        }
+
+        catch(Exception e){
+
+            return e.getMessage();
+        }
+    }
+
+    // FETCH RECORDS
+
+    @AuraEnabled(cacheable=true)
+
+    public static List<Employee__c> getEmployees(){
+
+        return [
+
+            SELECT
+                Name,
+                Email__c,
+                salary__c,
+                department__c,
+                Join_Date__c
+
+            FROM Employee__c
+        ];
+    }
+}
+
+
+EmployeeAuraController.js
+
+({
+    doInit : function(component, event, helper) {
+
+        let action =
+            component.get("c.getEmployees");
+
+        action.setCallback(this, function(response){
+
+            if(
+                response.getState() === "SUCCESS"
+            ){
+
+                component.set(
+                    "v.employees",
+                    response.getReturnValue()
+                );
+            }
+        });
+
+        $A.enqueueAction(action);
+    },
+
+    handleSubmit : function(component, event, helper) {
+
+        let name =
+            component.get("v.employeeName");
+
+        let email =
+            component.get("v.email");
+
+        let salary =
+            component.get("v.salary");
+
+        let department =
+            component.get("v.department");
+
+        let joiningDate =
+            component.get("v.joiningDate");
+
+        // VALIDATION
+
+        if(
+            !name ||
+            name.trim().length < 3
+        ){
+
+            alert(
+                "Employee Name must contain at least 3 characters"
+            );
+
+            return;
+        }
+
+        let emailRegex =
+        /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+
+        if(
+            !emailRegex.test(email)
+        ){
+
+            alert("Invalid Email");
+
+            return;
+        }
+
+        if(
+            salary < 10000 ||
+            salary > 500000
+        ){
+
+            alert(
+                "Salary must be between 10000 and 500000"
+            );
+
+            return;
+        }
+
+        if(!department){
+
+            alert(
+                "Please select department"
+            );
+
+            return;
+        }
+
+        let today = new Date();
+
+        let selectedDate =
+            new Date(joiningDate);
+
+        if(selectedDate > today){
+
+            alert(
+                "Joining date cannot be future date"
+            );
+
+            return;
+        }
+
+        // APEX CALL
+
+        let action =
+            component.get("c.saveEmployee");
+
+        action.setParams({
+
+            name : name,
+
+            email : email,
+
+            salary : salary,
+
+            department : department,
+
+            joiningDate : joiningDate
+        });
+
+        action.setCallback(this, function(response){
+
+            let result =
+                response.getReturnValue();
+
+            if(result === "SUCCESS"){
+
+                alert(
+                    "Employee Saved Successfully"
+                );
+
+                $A.get(
+                    'e.force:refreshView'
+                ).fire();
+            }
+
+            else if(
+                result === "EMAIL_EXISTS"
+            ){
+
+                alert(
+                    "Email already exists"
+                );
+            }
+
+            else{
+
+                alert(result);
+            }
+        });
+
+        $A.enqueueAction(action);
+    }
+})
+
+
+EmployeeApp
+
+<aura:application extends="force:slds">
+
+    <c:EmployeeAura/>
+
+</aura:application>
+
+and then preview
+
+Cloud Computing
+1.Blog-fullstack
+https://github.com/gayatrid-byte/blog
+cd blog
+npm install
+npm run dev evdhch karaychay
+ only one terminal required
+2.static website
+Make a folder inside E:/ and create index.html in that
+Make sure your port 80 is accessible in ec2
+Sudo dnf update
+sudo dnf install nginx -y
+sudo systemctl start nginx
+sudo systemctl enable nginx
+sudo systemctl status nginx
+//upload file go to a new terminal
+PS E:\> scp -i stud.pem cloud/index.html ec2-user@54.204.90.128:/home/ec2-user
+index.html
+[ec2-user@ip-172-31-23-182 ~]$ sudo mv /home/ec2-user/index.html /usr/share/nginx/html/index.html
+
+
+
+sudo systemctl restart nginx
+ 
+3.File transfer
+Create two virtual machines
+While creating the second one use the same vpx security grp subnet key pair and then create
+Open both ec2 terminal
+In 1st terminal
+scp -i E:\stud.pem E:\stud.pem ec2-user@54.204.90.128:/home/ec2-user/
+chmod 400 stud.pem in vm1
+Echo “hello this is me ” > demo.txt
+scp -i stud.pem demo.txt ec2-user@privat_ip/home/ec2-user
+ 
+ 
+ 
+visualforce codes:
+1. 	Sendemeil
+public class email1 {
+ 
+	public String Address {get;set;}
+	public String subject {get;set;}
+	public String body {get;set;}
+ 
+	public PageReference sendEmail(){
+ 
+    	// Email Validation
+ 
+    	if(String.isBlank(Address) ||
+           !Address.contains('@')){
+ 
+        	ApexPages.addMessage(
+ 
+            	new ApexPages.Message(
+                    ApexPages.Severity.ERROR,
+                	'Invalid Email ID'
+            	)
+        	);
+ 
+        	return null;
+    	}
+ 
+    	// Create Email Message
+ 
+        Messaging.SingleEmailMessage message =
+        	new Messaging.SingleEmailMessage();
+ 
+    	message.setToAddresses(
+        	new String[] {Address}
+    	);
+ 
+        message.setSubject(subject);
+ 
+        message.setPlainTextBody(body);
+ 
+    	// Attachment
+ 
+        Messaging.EmailFileAttachment attachment =
+        	new Messaging.EmailFileAttachment();
+ 
+        attachment.setFileName('Sample.txt');
+ 
+    	attachment.setBody(
+        	Blob.valueOf('Sample value for sending')
+    	);
+ 
+        attachment.setContentType('text/plain');
+ 
+        message.setFileAttachments(
+        	new Messaging.EmailFileAttachment[] {attachment}
+    	);
+ 
+    	// Send Email
+ 
+        Messaging.SendEmailResult[] result =
+ 
+        	Messaging.sendEmail(
+            	new Messaging.SingleEmailMessage[] {message}
+        	);
+ 
+    	// Result Message
+ 
+    	if(result[0].isSuccess()){
+ 
+        	ApexPages.addMessage(
+ 
+            	new ApexPages.Message(
+                    ApexPages.Severity.CONFIRM,
+                	'EMAIL SENT SUCCESSFULLY'
+            	)
+        	);
+    	}
+    	else{
+ 
+        	ApexPages.addMessage(
+ 
+            	new ApexPages.Message(
+                    ApexPages.Severity.ERROR,
+                    result[0].getErrors()[0].getMessage()
+            	)
+        	);
+    	}
+ 
+    	return null;
+	}
+}
+ 
+ 
+ 
+<apex:page controller="email1">
+<apex:form >
+<apex:pageMessages id="msg" />
+<apex:pageBlock title="sendemail" id="bl">
+<apex:pageBlockSection columns="1">
+<apex:inputText value="{!Address}" label="Adress"/>
+<apex:inputText value="{!subject}" label="Subject"/>
+<apex:inputText value="{!body}" label="Body"/>
+<apex:commandButton value="Save" action="{!sendEmail}" rerender="bl,msg"/>
+</apex:pageBlockSection>
+ 
+ 
+</apex:pageBlock>
+</apex:form>
+</apex:page>
+             	
+ 
+ 
+ 
+2.employee console based
+public class EmployeeController {
+//Add employee
+	public static void addemployee(String empname,Decimal salary,String department,Date joindate,String email){
+    	Employee__c emp=new Employee__c();
+    	emp.Name = empName;
+    	emp.Email__c = email;
+    	emp.department__c = department;
+    	emp.Join_Date__c = joinDate;
+    	emp.salary__c = salary;
+    	
+    	insert emp;
+    	System.debug('Employee added successfully');
+	}
+	//view employee
+	public static void viewemployee(){
+    	List<Employee__c> empList=[
+        	SELECT Name,Email__c,department__c,Join_Date__c,salary__c
+        	FROM Employee__c
+    	];
+    	for(Employee__c emp:empList){
+             System.debug('----------------------');
+        	System.debug('Employee Name : ' + emp.Name);
+            System.debug('Email     	: ' + emp.Email__c);
+            System.debug('Department	: ' + emp.department__c);
+        	System.debug('Join Date 	: ' + emp.Join_Date__c);
+            System.debug('Salary    	: ' + emp.salary__c);
+        	
+    	}
+       	
+	}
+	//edit employee
+   public static void editemployee(
+	String empName,
+	String depart
+){
+ 
+	List<Employee__c> empList = [
+ 
+    	SELECT Id,
+           	department__c
+ 
+    	FROM Employee__c
+ 
+    	WHERE Name = :empName
+ 
+    	LIMIT 1
+	];
+ 
+	// Check existence
+ 
+	if(empList.isEmpty()){
+ 
+    	System.debug('Employee not found');
+    	return;
+	}
+ 
+	Employee__c emp = empList[0];
+ 
+	emp.department__c = depart;
+ 
+	update emp;
+ 
+	System.debug('Employee updated successfully');
+}
+	//delete employee
+	public static void deleteemp(String empname){
+    	Employee__c emp=[
+        	SELECT Name,Email__c,department__c,Join_Date__c,salary__c
+        	FROM Employee__c
+        	WHERE Name=:empname
+        	LIMIT 1        	
+    	];
+    	delete emp;
+    	System.debug('Employee deleted successfully');
+	}
+}
+ 
+ 
+ 
+ 
+ 
+ 
+public class StudentController {
+ 
+	public Student__c student {get; set;}
+ 
+	public List<Student__c> studentList {get; set;}
+ 
+	// Constructor
+	public StudentController(){
+ 
+    	student = new Student__c();
+ 
+    	loadstudents();
+	}
+ 
+	// Add Student
+	public void addstudent(){
+ 
+    	// Null Validation
+    	if(student.Name == null ||
+       	student.Rollno__c == null ||
+       	student.class__c == null ||
+       	student.mobile__c == null){
+ 
+        	ApexPages.addMessage(
+            	new ApexPages.Message(
+                    ApexPages.Severity.ERROR,
+                	'Do not leave fields empty'
+            	)
+        	);
+ 
+        	return;
+    	}
+ 
+    	// Name Validation (only alphabets)
+        if(!Pattern.matches('[a-zA-Z ]+', student.Name)){
+ 
+        	ApexPages.addMessage(
+            	new ApexPages.Message(
+                    ApexPages.Severity.ERROR,
+                	'Name should contain only alphabets'
+            	)
+        	);
+ 
+        	return;
+    	}
+ 
+    	// Mobile Validation (exactly 10 digits)
+        if(!Pattern.matches('[0-9]{10}', student.mobile__c)){
+ 
+        	ApexPages.addMessage(
+            	new ApexPages.Message(
+                    ApexPages.Severity.ERROR,
+                	'Mobile number must contain exactly 10 digits'
+            	)
+        	);
+ 
+        	return;
+    	}
+ 
+    	// Duplicate Roll Number Check
+    	List<Student__c> existing = [
+ 
+        	SELECT Id
+        	FROM Student__c
+        	WHERE Rollno__c = :student.Rollno__c
+        	AND Id != :student.Id
+    	];
+ 
+    	if(existing.size() > 0){
+ 
+        	ApexPages.addMessage(
+            	new ApexPages.Message(
+                    ApexPages.Severity.ERROR,
+                	'Roll number already exists'
+            	)
+        	);
+ 
+        	return;
+    	}
+ 
+    	// Insert Record
+    	upsert student;
+ 
+    	// Clear Form
+    	student = new Student__c();
+ 
+    	// Reload Table
+    	loadstudents();
+	}
+ 
+	// Load Records
+	public void loadstudents(){
+ 
+    	studentList = [
+ 
+        	SELECT Name,
+               	Rollno__c,
+               	class__c,
+               	mobile__c
+ 
+        	FROM Student__c
+    	];
+	}
+	public void editstudent(){
+     	String studentid=ApexPages.CurrentPage().getParameters().get('pid');
+    	student=[
+        	SELECT Id,Name,Rollno__c,class__c,mobile__c
+        	FROM Student__c
+        	WHERE Id=:studentid
+    	];
+         	
+     	
+	}
+	public void deletestudent(){
+   	String studentid=ApexPages.CurrentPage().getParameters().get('pid');
+    	Student__c stud=[
+        	SELECT Id,Name,Rollno__c,class__c,mobile__c
+        	FROM Student__c
+        	WHERE Id=:studentid
+    	];
+    	delete stud;
+    	loadstudents();
+	}
+}
+ 
+ 
+ 
+public class ProductController {
+	public Inventory__c inventory {get;set;}
+	public List<Inventory__c> inventoryList {get;set;}
+	public ProductController(){
+    	inventory=new Inventory__c();
+    	loadinventory();
+	}
+	public void addproduct(){
+    	if(inventory.Name==null || inventory.mandate__c==null || inventory.expdate__c==null || inventory.serialno__c==null){
+            ApexPages.addMessage(new ApexPages.Message(
+            ApexPages.Severity.ERROR, 'Dont add empty values'));
+            	
+    	}
+    	
+    	
+    	upsert inventory;
+    	inventory=new Inventory__c();
+    	loadinventory();
+	}
+	public void loadinventory(){
+        	
+    	inventoryList =[
+      	SELECT Id,Name,mandate__c,serialno__c,expdate__c
+        	FROM Inventory__c
+    	];
+    	
+	}
+	public void editproduct(){
+    	String productid=ApexPages.CurrentPage().getParameters().get('pid');
+    	inventory=[
+        	SELECT Id,Name,mandate__c,serialno__c,expdate__c
+        	FROM Inventory__c
+        	WHERE Id=:productid
+    	];
+	}
+	public void deleteproduct(){
+    	String productid=ApexPages.CurrentPage().getParameters().get('pid');
+    	Inventory__c p=[
+        	SELECT Id,Name,mandate__c,expdate__c,serialno__c
+        	FROM Inventory__c
+        	WHERE Id=:productid
+    	];
+    	delete p;
+    	loadinventory();
+	}
+	
+}
+
